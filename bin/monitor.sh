@@ -34,4 +34,82 @@ THRESH_MEM="${THRESH_MEM:-90}"      # max % memory allowed
 THRESH_DISK="${THRESH_DISK:-90}"    # max % disk usage allowed
 ALERT_CMD="${ALERT_CMD:-}"          
 
+# Make sure dependencies are available
+need awk
+need df
+
+
+# Functions to measure system resource usage
+cpu_usage(){
+  #Returns current CPU usage as an integer(0-100)
+  # Strategy: if `mpstat` exists → use it, else fallback to parsing `top`
+  if command -v mpstat >/dev/null 2>&1; then
+    #mpstat prints idle %,so we sub
+    mpstat 1 1 | awk '/Average/ && $12 ~ /[0-9.]+/ {printf("%.0f\n", 100 - $12)}'
+  else
+     # fallback: run top twice (first is warm-up), parse "Cpu(s)" line
+     top -bn2 | awk '/Cpu\(s\)/ {u=$2+$4} END {printf("%.0f\n", u)}'
+  fi
+
+}
+
+mem_usage() {
+  # Returns memory usage %
+  # Uses /proc/meminfo: (1 - MemAvailable / MemTotal) * 100
+  awk '/MemTotal/ {t=$2} /MemAvailable/ {a=$2} END {printf("%.0f\n", (1- a/t)*100)}' /proc/meminfo
+}
+
+disk_usage_root() {
+  # Returns disk usage % for root partition (/)
+  df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}'
+}
+
+alert() {
+  # Logs a warning and runs the alert command if configured
+  local msg="$1"
+  log WARN "$msg"
+  if [[ -n "$ALERT_CMD" ]]; then
+    # ALERT_CMD might be something like:
+    #   ALERT_CMD='notify-send "ALERT"'
+    #   ALERT_CMD='mail -s "Alert" you@example.com'
+    eval "$ALERT_CMD" <<< "$msg"
+  fi
+}
+
+main() {
+  # Ensure log directory exists
+  mkdir -p "$ROOT/logs"
+
+  #Get usage values
+  local c m d
+  c="$(cpu_usage)"
+  m="$(mem_usage)"
+  d="$(disk_usage_root)"
+
+  # Always log the current snapshot
+  log INFO "CPU=${c}% MEM=${m}% DISK=${d}%"
+
+   # Compare against thresholds and trigger alerts if exceeded
+  (( c > THRESH_CPU ))  && alert "High CPU: ${c}% > ${THRESH_CPU}%"
+  (( m > THRESH_MEM ))  && alert "High MEM: ${m}% > ${THRESH_MEM}%"
+  (( d > THRESH_DISK )) && alert "Low disk space: ${d}% > ${THRESH_DISK}%"
+}
+
+main "$@"
+
+
+
+
+
+  
+
+  
+
+
+
+
+    
+  
+
+
 
