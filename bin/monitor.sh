@@ -25,8 +25,13 @@ source "$ROOT/lib/helpers.sh"
 LOG_FILE="${LOG_FILE:-$ROOT/logs/monitor.log)"
 
 #Load optional config file (etx/monitor.env)
-#This Lets you customize thres
+#This Lets you customize thresholds without editing the script
+load_env "$ROOT/etc/monitor.env"
 
-
+# Configuration (with defaults if env file not present)
+THRESH_CPU="${THRESH_CPU:-85}"      # max % CPU allowed
+THRESH_MEM="${THRESH_MEM:-90}"      # max % memory allowed
+THRESH_DISK="${THRESH_DISK:-90}"    # max % disk usage allowed
+ALERT_CMD="${ALERT_CMD:-}"          
 
 
